@@ -240,63 +240,9 @@
     }
 
 
-    .reader-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      align-items: stretch;
-      margin-top: 12px;
-    }
 
-    .reader-panel {
-      min-width: 0;
-    }
 
-    .reader-panel textarea {
-      height: 520px;
-      min-height: 520px;
-    }
 
-    .reader-panel .readalong-box {
-      height: 520px;
-      max-height: 520px;
-      margin-top: 0;
-    }
-
-    .readalong-box {
-      width: 100%;
-      max-height: 360px;
-      overflow-y: auto;
-      box-sizing: border-box;
-      border-radius: 14px;
-      border: 1px solid #4b5563;
-      background: #0b1220;
-      color: var(--text);
-      padding: 14px;
-      font-size: 18px;
-      line-height: 1.7;
-      margin-top: 12px;
-      white-space: pre-wrap;
-    }
-
-    .readalong-title {
-      margin-top: 14px;
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: bold;
-    }
-
-    .word {
-      border-radius: 0;
-      padding: 0;
-    }
-
-    .word.active-word,
-    .word.spoken-word {
-      background: transparent;
-      color: inherit;
-      box-shadow: none;
-    }
 
     @media (max-width: 700px) {
       body {
@@ -329,27 +275,14 @@
         min-height: 360px;
       }
 
-      .reader-grid {
-        grid-template-columns: 1fr;
       }
-
-      .reader-panel textarea {
-        height: 360px;
-        min-height: 360px;
-      }
-
-      .reader-panel .readalong-box {
-        height: 360px;
-        max-height: 360px;
-      }
-    }
   </style>
 </head>
 <body>
   <main class="app">
     <h1>Simple Text and PDF Reader</h1>
     <div class="subtitle">
-      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with volume control and an approximate scrolling position window.
+      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with volume control and a button that jumps back to the last spoken word.
     </div>
 
     <div class="notice">
@@ -378,12 +311,10 @@
     </div>
 
     <div class="start-row">
-      <button id="markStartBtn" class="secondary">Mark Cursor Start</button>
-      <button id="jumpStartBtn" class="secondary">Jump To Marked Start</button>
-      <button id="clearMarkBtn" class="secondary">Clear Mark</button>
       <button id="saveSpotBtn" class="secondary">Save Spot</button>
       <button id="returnSpotBtn" class="secondary">Return To Saved Spot</button>
       <button id="clearSavedSpotBtn" class="secondary">Clear Saved Spot</button>
+      <button id="goLastSpokenBtn" class="secondary">Go To Last Word Spoken</button>
     </div>
 
     <div class="record-row">
@@ -414,23 +345,13 @@
       </div>
     </div>
 
-    <div class="reader-grid">
-      <div class="reader-panel">
-        <div class="readalong-title">Text Box</div>
-        <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
-      </div>
-
-      <div class="reader-panel">
-        <div class="readalong-title">Approximate Position</div>
-        <div id="readAlongBox" class="readalong-box">Text will appear here when reading starts.</div>
-      </div>
-    </div>
+    <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
 
 
     <div id="status" class="status">Ready.</div>
 
     <div class="small">
-      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows. The Approximate Position window scrolls near the current reading area, but it is not exact word tracking.
+      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows. Use Go To Last Word Spoken to jump the text box back near the latest spoken word.
     </div>
   </main>
 
@@ -453,12 +374,10 @@
     const resumeBtn = document.getElementById("resumeBtn");
     const stopBtn = document.getElementById("stopBtn");
     const clearBtn = document.getElementById("clearBtn");
-    const markStartBtn = document.getElementById("markStartBtn");
-    const jumpStartBtn = document.getElementById("jumpStartBtn");
-    const clearMarkBtn = document.getElementById("clearMarkBtn");
     const saveSpotBtn = document.getElementById("saveSpotBtn");
     const returnSpotBtn = document.getElementById("returnSpotBtn");
     const clearSavedSpotBtn = document.getElementById("clearSavedSpotBtn");
+    const goLastSpokenBtn = document.getElementById("goLastSpokenBtn");
     const voiceSelect = document.getElementById("voiceSelect");
     const rate = document.getElementById("rate");
     const pitch = document.getElementById("pitch");
@@ -467,7 +386,6 @@
     const pitchValue = document.getElementById("pitchValue");
     const volumeValue = document.getElementById("volumeValue");
     const status = document.getElementById("status");
-    const readAlongBox = document.getElementById("readAlongBox");
 
     const startRecordBtn = document.getElementById("startRecordBtn");
     const stopRecordBtn = document.getElementById("stopRecordBtn");
@@ -478,7 +396,6 @@
     let currentChunkIndex = 0;
     let isReading = false;
     let isPaused = false;
-    let markedStart = null;
     const STORAGE_KEY = "simpleTextPdfReaderSavedSpotV1";
     const TEXT_STORAGE_KEY = "simpleTextPdfReaderTextV1";
     let loadedPdfArrayBuffer = null;
@@ -489,6 +406,7 @@
     let currentUtteranceHadBoundary = false;
     let currentChunkFirstWordIndex = -1;
     let currentChunkLastWordIndex = -1;
+    let lastSpokenCharIndex = 0;
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -546,6 +464,15 @@
       setStatus(`Returned to saved spot at character ${position.toLocaleString()}.`);
     }
 
+    function returnToLastSpokenWord() {
+      const position = Math.max(0, Math.min(lastSpokenCharIndex || 0, textBox.value.length));
+
+      textBox.focus();
+      textBox.setSelectionRange(position, position);
+      scrollTextBoxToChar(position);
+      setStatus(`Jumped to last spoken word area at character ${position.toLocaleString()}.`);
+    }
+
     function restoreSavedTextAndSpotOnLoad() {
       try {
         const savedText = localStorage.getItem(TEXT_STORAGE_KEY);
@@ -588,14 +515,7 @@
       clearHighlightFallbackTimer();
       readAlongWords = tokenizeForReadAlong(text);
       activeWordIndex = -1;
-      readAlongBox.scrollTop = 0;
-
-      if (!text.trim()) {
-        readAlongBox.textContent = "Text will appear here when reading starts.";
-        return;
-      }
-
-      readAlongBox.textContent = text;
+      lastSpokenCharIndex = 0;
     }
 
     function findWordIndexFromChar(charIndex) {
@@ -676,6 +596,7 @@
 
       const word = readAlongWords[nextIndex];
       if (word) {
+        lastSpokenCharIndex = word.start;
         scrollTextBoxToChar(word.start);
       }
     }
@@ -709,34 +630,25 @@
       restartFallbackHighlightTimer();
     }
 
-    function scrollApproximatePositionToChar(charIndex) {
-      const text = readAlongBox.textContent || "";
-      if (!text || charIndex < 0) return;
-
-      const safeIndex = Math.max(0, Math.min(charIndex, text.length));
-      const percent = text.length > 0 ? safeIndex / text.length : 0;
-      const maxScroll = Math.max(0, readAlongBox.scrollHeight - readAlongBox.clientHeight);
-
-      readAlongBox.scrollTop = maxScroll * percent;
-    }
-
-    function highlightWordByIndex(index) {
+    function updateLastSpokenPositionFromWordIndex(index) {
       if (index < 0 || index >= readAlongWords.length) return;
 
       activeWordIndex = index;
       const word = readAlongWords[index];
 
       if (word) {
-        scrollApproximatePositionToChar(word.start);
+        lastSpokenCharIndex = word.start;
       }
+    }
+
+    function highlightWordByIndex(index) {
+      updateLastSpokenPositionFromWordIndex(index);
     }
 
     function clearReadAlongHighlight() {
       clearHighlightFallbackTimer();
       currentChunkFirstWordIndex = -1;
       currentChunkLastWordIndex = -1;
-      const oldActive = readAlongBox.querySelector(".active-word");
-      if (oldActive) oldActive.classList.remove("active-word");
       activeWordIndex = -1;
     }
 
@@ -788,7 +700,6 @@
       reader.onload = () => {
         textBox.value = reader.result;
         saveCurrentText();
-        markedStart = null;
         setStatus(`Loaded TXT: ${file.name}`);
       };
 
@@ -857,7 +768,6 @@
 
         textBox.value = output.trim();
         saveCurrentText();
-        markedStart = null;
         setStatus(`Extracted text from ${pdf.numPages} PDF page(s).`);
       } catch (error) {
         setStatus("Could not extract text from this PDF.");
@@ -987,9 +897,9 @@
           currentUtteranceHadBoundary = true;
           clearHighlightFallbackTimer();
           const absoluteCharIndex = chunk.start + event.charIndex;
+          lastSpokenCharIndex = absoluteCharIndex;
           const wordIndex = findWordIndexFromChar(absoluteCharIndex);
           highlightWordByIndex(wordIndex);
-          scrollApproximatePositionToChar(absoluteCharIndex);
           scrollTextBoxToChar(absoluteCharIndex);
         }
       };
@@ -1023,27 +933,6 @@
       beginReading(textFromCursor, `Reading from cursor at character ${position.toLocaleString()}...`);
     });
 
-    markStartBtn.addEventListener("click", () => {
-      markedStart = getCursorPosition();
-      setStatus(`Marked start at character ${markedStart.toLocaleString()}.`);
-    });
-
-    jumpStartBtn.addEventListener("click", () => {
-      if (markedStart === null) {
-        setStatus("No start mark yet. Click in the text and press Mark Cursor Start first.");
-        return;
-      }
-
-      textBox.focus();
-      textBox.setSelectionRange(markedStart, markedStart);
-      setStatus(`Jumped to marked start at character ${markedStart.toLocaleString()}.`);
-    });
-
-    clearMarkBtn.addEventListener("click", () => {
-      markedStart = null;
-      setStatus("Start mark cleared.");
-    });
-
     saveSpotBtn.addEventListener("click", () => {
       trackAppEvent("save_spot_clicked");
       saveSpot();
@@ -1060,6 +949,10 @@
       } catch (error) {
         setStatus("Could not clear saved spot.");
       }
+    });
+
+    goLastSpokenBtn.addEventListener("click", () => {
+      returnToLastSpokenWord();
     });
 
     textBox.addEventListener("click", () => {
@@ -1102,9 +995,8 @@
       isPaused = false;
       window.speechSynthesis.cancel();
       textBox.value = "";
-      readAlongBox.textContent = "Text will appear here when reading starts.";
       readAlongWords = [];
-      markedStart = null;
+      lastSpokenCharIndex = 0;
       try {
         localStorage.removeItem(TEXT_STORAGE_KEY);
         localStorage.removeItem(STORAGE_KEY);
