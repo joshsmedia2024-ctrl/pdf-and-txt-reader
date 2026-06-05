@@ -287,19 +287,15 @@
     }
 
     .word {
-      border-radius: 5px;
-      padding: 1px 2px;
-      transition: background 0.12s ease, color 0.12s ease;
+      border-radius: 0;
+      padding: 0;
     }
 
-    .word.active-word {
-      background: #facc15;
-      color: #111827;
-      box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25);
-    }
-
+    .word.active-word,
     .word.spoken-word {
-      color: #9ca3af;
+      background: transparent;
+      color: inherit;
+      box-shadow: none;
     }
 
     @media (max-width: 700px) {
@@ -353,7 +349,7 @@
   <main class="app">
     <h1>Simple Text and PDF Reader</h1>
     <div class="subtitle">
-      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with word highlighting and volume control.
+      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with volume control and an approximate scrolling position window.
     </div>
 
     <div class="notice">
@@ -425,8 +421,8 @@
       </div>
 
       <div class="reader-panel">
-        <div class="readalong-title">Read-Along View</div>
-        <div id="readAlongBox" class="readalong-box">Words will appear here when reading starts.</div>
+        <div class="readalong-title">Approximate Position</div>
+        <div id="readAlongBox" class="readalong-box">Text will appear here when reading starts.</div>
       </div>
     </div>
 
@@ -434,7 +430,7 @@
     <div id="status" class="status">Ready.</div>
 
     <div class="small">
-      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows.
+      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows. The Approximate Position window scrolls near the current reading area, but it is not exact word tracking.
     </div>
   </main>
 
@@ -594,23 +590,12 @@
       activeWordIndex = -1;
       readAlongBox.scrollTop = 0;
 
-      if (!readAlongWords.length) {
-        readAlongBox.textContent = "Words will appear here when reading starts.";
+      if (!text.trim()) {
+        readAlongBox.textContent = "Text will appear here when reading starts.";
         return;
       }
 
-      readAlongBox.innerHTML = "";
-      const fragment = document.createDocumentFragment();
-
-      readAlongWords.forEach(word => {
-        const span = document.createElement("span");
-        span.className = "word";
-        span.dataset.index = String(word.index);
-        span.textContent = word.text;
-        fragment.appendChild(span);
-      });
-
-      readAlongBox.appendChild(fragment);
+      readAlongBox.textContent = text;
     }
 
     function findWordIndexFromChar(charIndex) {
@@ -724,20 +709,25 @@
       restartFallbackHighlightTimer();
     }
 
+    function scrollApproximatePositionToChar(charIndex) {
+      const text = readAlongBox.textContent || "";
+      if (!text || charIndex < 0) return;
+
+      const safeIndex = Math.max(0, Math.min(charIndex, text.length));
+      const percent = text.length > 0 ? safeIndex / text.length : 0;
+      const maxScroll = Math.max(0, readAlongBox.scrollHeight - readAlongBox.clientHeight);
+
+      readAlongBox.scrollTop = maxScroll * percent;
+    }
+
     function highlightWordByIndex(index) {
-      if (index < 0 || index >= readAlongWords.length || index === activeWordIndex) return;
+      if (index < 0 || index >= readAlongWords.length) return;
 
-      const oldActive = readAlongBox.querySelector(".active-word");
-      if (oldActive) {
-        oldActive.classList.remove("active-word");
-        oldActive.classList.add("spoken-word");
-      }
+      activeWordIndex = index;
+      const word = readAlongWords[index];
 
-      const next = readAlongBox.querySelector(`[data-index="${index}"]`);
-      if (next) {
-        next.classList.add("active-word");
-        next.scrollIntoView({ block: "center", behavior: "smooth" });
-        activeWordIndex = index;
+      if (word) {
+        scrollApproximatePositionToChar(word.start);
       }
     }
 
@@ -999,6 +989,7 @@
           const absoluteCharIndex = chunk.start + event.charIndex;
           const wordIndex = findWordIndexFromChar(absoluteCharIndex);
           highlightWordByIndex(wordIndex);
+          scrollApproximatePositionToChar(absoluteCharIndex);
           scrollTextBoxToChar(absoluteCharIndex);
         }
       };
@@ -1111,7 +1102,7 @@
       isPaused = false;
       window.speechSynthesis.cancel();
       textBox.value = "";
-      readAlongBox.textContent = "Words will appear here when reading starts.";
+      readAlongBox.textContent = "Text will appear here when reading starts.";
       readAlongWords = [];
       markedStart = null;
       try {
