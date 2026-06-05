@@ -491,6 +491,8 @@
     let activeWordIndex = -1;
     let highlightFallbackTimer = null;
     let currentUtteranceHadBoundary = false;
+    let currentChunkFirstWordIndex = -1;
+    let currentChunkLastWordIndex = -1;
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -657,42 +659,69 @@
       }
     }
 
+    function runFallbackHighlightStep() {
+      if (currentUtteranceHadBoundary) {
+        clearHighlightFallbackTimer();
+        return;
+      }
+
+      if (!isReading || isPaused || window.speechSynthesis.paused) {
+        return;
+      }
+
+      if (currentChunkFirstWordIndex < 0 || currentChunkLastWordIndex < 0) {
+        clearHighlightFallbackTimer();
+        return;
+      }
+
+      let nextIndex = activeWordIndex;
+
+      if (nextIndex < currentChunkFirstWordIndex) {
+        nextIndex = currentChunkFirstWordIndex;
+      } else {
+        nextIndex += 1;
+      }
+
+      if (nextIndex > currentChunkLastWordIndex) {
+        clearHighlightFallbackTimer();
+        return;
+      }
+
+      highlightWordByIndex(nextIndex);
+
+      const word = readAlongWords[nextIndex];
+      if (word) {
+        scrollTextBoxToChar(word.start);
+      }
+    }
+
+    function restartFallbackHighlightTimer() {
+      if (currentUtteranceHadBoundary) return;
+      if (currentChunkFirstWordIndex < 0 || currentChunkLastWordIndex < 0) return;
+
+      const rateNumber = Math.max(0.5, Number(rate.value) || 1);
+      const intervalMs = Math.max(140, 330 / rateNumber);
+
+      clearHighlightFallbackTimer();
+      highlightFallbackTimer = setInterval(runFallbackHighlightStep, intervalMs);
+    }
+
     function startFallbackHighlight(chunk) {
       clearHighlightFallbackTimer();
       currentUtteranceHadBoundary = false;
 
-      const chunkWords = tokenizeForReadAlong(chunk.text);
-      if (!chunkWords.length) return;
-
-      let chunkWordIndex = 0;
       const firstGlobalIndex = findWordIndexFromChar(chunk.start);
-      const rateValue = Math.max(0.5, Number(rate.value) || 1);
-      const intervalMs = Math.max(140, 330 / rateValue);
+      const lastCharIndex = Math.max(chunk.start, chunk.start + chunk.text.length - 1);
+      const lastGlobalIndex = findWordIndexFromChar(lastCharIndex);
 
-      highlightFallbackTimer = setInterval(() => {
-        if (currentUtteranceHadBoundary) {
-          clearHighlightFallbackTimer();
-          return;
-        }
+      currentChunkFirstWordIndex = firstGlobalIndex;
+      currentChunkLastWordIndex = lastGlobalIndex;
 
-        if (!isReading || window.speechSynthesis.paused) {
-          return;
-        }
+      if (firstGlobalIndex < 0 || lastGlobalIndex < 0) {
+        return;
+      }
 
-        const targetIndex = firstGlobalIndex + chunkWordIndex;
-        highlightWordByIndex(targetIndex);
-
-        const word = readAlongWords[targetIndex];
-        if (word) {
-          scrollTextBoxToChar(word.start);
-        }
-
-        chunkWordIndex++;
-
-        if (chunkWordIndex >= chunkWords.length) {
-          clearHighlightFallbackTimer();
-        }
-      }, intervalMs);
+      restartFallbackHighlightTimer();
     }
 
     function highlightWordByIndex(index) {
@@ -714,6 +743,8 @@
 
     function clearReadAlongHighlight() {
       clearHighlightFallbackTimer();
+      currentChunkFirstWordIndex = -1;
+      currentChunkLastWordIndex = -1;
       const oldActive = readAlongBox.querySelector(".active-word");
       if (oldActive) oldActive.classList.remove("active-word");
       activeWordIndex = -1;
@@ -1055,12 +1086,14 @@
     pauseBtn.addEventListener("click", () => {
       window.speechSynthesis.pause();
       isPaused = true;
+      clearHighlightFallbackTimer();
       setStatus("Paused. Press Spacebar to resume.");
     });
 
     resumeBtn.addEventListener("click", () => {
       window.speechSynthesis.resume();
       isPaused = false;
+      restartFallbackHighlightTimer();
       setStatus("Resumed. Press Spacebar to pause.");
     });
 
@@ -1108,10 +1141,12 @@
       if (isPaused || window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
         isPaused = false;
+        restartFallbackHighlightTimer();
         setStatus("Resumed. Press Spacebar to pause.");
       } else {
         window.speechSynthesis.pause();
         isPaused = true;
+        clearHighlightFallbackTimer();
         setStatus("Paused. Press Spacebar to resume.");
       }
     });
