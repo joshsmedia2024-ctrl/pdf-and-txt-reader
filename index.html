@@ -7,7 +7,7 @@
 
 
   <!-- Google Analytics 4
-       Replace G-XXXXXXXXXX with your real GA4 Measurement ID before publishing.
+       Replace G-XYNR40PW3D with your real GA4 Measurement ID before publishing.
        Example format: G-ABC123XYZ9
   -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XYNR40PW3D"></script>
@@ -239,6 +239,69 @@
       background: rgba(17, 24, 39, 0.55);
     }
 
+
+    .reader-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: stretch;
+      margin-top: 12px;
+    }
+
+    .reader-panel {
+      min-width: 0;
+    }
+
+    .reader-panel textarea {
+      height: 520px;
+      min-height: 520px;
+    }
+
+    .reader-panel .readalong-box {
+      height: 520px;
+      max-height: 520px;
+      margin-top: 0;
+    }
+
+    .readalong-box {
+      width: 100%;
+      max-height: 360px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      border-radius: 14px;
+      border: 1px solid #4b5563;
+      background: #0b1220;
+      color: var(--text);
+      padding: 14px;
+      font-size: 18px;
+      line-height: 1.7;
+      margin-top: 12px;
+      white-space: pre-wrap;
+    }
+
+    .readalong-title {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .word {
+      border-radius: 5px;
+      padding: 1px 2px;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+
+    .word.active-word {
+      background: #facc15;
+      color: #111827;
+      box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.25);
+    }
+
+    .word.spoken-word {
+      color: #9ca3af;
+    }
+
     @media (max-width: 700px) {
       body {
         padding: 12px;
@@ -269,6 +332,20 @@
       textarea {
         min-height: 360px;
       }
+
+      .reader-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .reader-panel textarea {
+        height: 360px;
+        min-height: 360px;
+      }
+
+      .reader-panel .readalong-box {
+        height: 360px;
+        max-height: 360px;
+      }
     }
   </style>
 </head>
@@ -276,16 +353,17 @@
   <main class="app">
     <h1>Simple Text and PDF Reader</h1>
     <div class="subtitle">
-      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud.
+      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with word highlighting and volume control.
     </div>
 
     <div class="notice">
       Import a PDF, extract its readable text, then use the reader controls below. Some PDFs are scanned images instead of selectable text, so those may not extract cleanly.
+      <br><br><b>Keyboard shortcut:</b> press <b>Spacebar</b> to pause or resume reading. When typing inside the text box, Spacebar still types a normal space.
     </div>
 
     <div class="box">
       <div class="pdf-row">
-        <label class="file-button orange" for="pdfInput">Import PDF</label>
+        <button id="importPdfBtn" class="file-button orange" type="button">Import PDF</button>
         <input id="pdfInput" type="file" accept=".pdf,application/pdf" />
         <button id="extractPdfBtn" class="orange">Extract PDF Text</button>
         <button id="addPdfPageMarkersBtn" class="secondary">PDF Broom</button>
@@ -293,7 +371,7 @@
     </div>
 
     <div class="controls">
-      <label class="file-button" for="fileInput">Import TXT File</label>
+      <button id="importTxtBtn" class="file-button" type="button">Import TXT File</button>
       <input id="fileInput" type="file" accept=".txt,text/plain" />
       <button id="readBtn">Read From Beginning</button>
       <button id="readCursorBtn" class="purple">Read From Cursor</button>
@@ -332,14 +410,31 @@
         <input id="pitch" type="range" min="0" max="2" step="0.1" value="1" />
         <span id="pitchValue">1.0</span>
       </div>
+
+      <div class="range-wrap">
+        <span>Volume</span>
+        <input id="volume" type="range" min="0" max="100" step="1" value="100" />
+        <span id="volumeValue">100%</span>
+      </div>
     </div>
 
-    <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
+    <div class="reader-grid">
+      <div class="reader-panel">
+        <div class="readalong-title">Text Box</div>
+        <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
+      </div>
+
+      <div class="reader-panel">
+        <div class="readalong-title">Read-Along View</div>
+        <div id="readAlongBox" class="readalong-box">Words will appear here when reading starts.</div>
+      </div>
+    </div>
+
 
     <div id="status" class="status">Ready.</div>
 
     <div class="small">
-      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well.
+      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows.
     </div>
   </main>
 
@@ -350,6 +445,8 @@
 
     const fileInput = document.getElementById("fileInput");
     const pdfInput = document.getElementById("pdfInput");
+    const importTxtBtn = document.getElementById("importTxtBtn");
+    const importPdfBtn = document.getElementById("importPdfBtn");
     const extractPdfBtn = document.getElementById("extractPdfBtn");
     const addPdfPageMarkersBtn = document.getElementById("addPdfPageMarkersBtn");
 
@@ -369,9 +466,12 @@
     const voiceSelect = document.getElementById("voiceSelect");
     const rate = document.getElementById("rate");
     const pitch = document.getElementById("pitch");
+    const volume = document.getElementById("volume");
     const rateValue = document.getElementById("rateValue");
     const pitchValue = document.getElementById("pitchValue");
+    const volumeValue = document.getElementById("volumeValue");
     const status = document.getElementById("status");
+    const readAlongBox = document.getElementById("readAlongBox");
 
     const startRecordBtn = document.getElementById("startRecordBtn");
     const stopRecordBtn = document.getElementById("stopRecordBtn");
@@ -381,11 +481,14 @@
     let currentChunks = [];
     let currentChunkIndex = 0;
     let isReading = false;
+    let isPaused = false;
     let markedStart = null;
     const STORAGE_KEY = "simpleTextPdfReaderSavedSpotV1";
     const TEXT_STORAGE_KEY = "simpleTextPdfReaderTextV1";
     let loadedPdfArrayBuffer = null;
     let loadedPdfName = "";
+    let readAlongWords = [];
+    let activeWordIndex = -1;
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -462,6 +565,109 @@
       }
     }
 
+
+    function tokenizeForReadAlong(text) {
+      const tokens = text.match(/\S+\s*/g) || [];
+      let charPosition = 0;
+
+      return tokens.map((token, index) => {
+        const start = charPosition;
+        const end = charPosition + token.length;
+        charPosition = end;
+
+        return {
+          index,
+          text: token,
+          start,
+          end
+        };
+      });
+    }
+
+    function renderReadAlong(text) {
+      readAlongWords = tokenizeForReadAlong(text);
+      activeWordIndex = -1;
+
+      if (!readAlongWords.length) {
+        readAlongBox.textContent = "Words will appear here when reading starts.";
+        return;
+      }
+
+      readAlongBox.innerHTML = "";
+      const fragment = document.createDocumentFragment();
+
+      readAlongWords.forEach(word => {
+        const span = document.createElement("span");
+        span.className = "word";
+        span.dataset.index = String(word.index);
+        span.textContent = word.text;
+        fragment.appendChild(span);
+      });
+
+      readAlongBox.appendChild(fragment);
+    }
+
+    function findWordIndexFromChar(charIndex) {
+      if (!readAlongWords.length) return -1;
+
+      let low = 0;
+      let high = readAlongWords.length - 1;
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const word = readAlongWords[mid];
+
+        if (charIndex < word.start) {
+          high = mid - 1;
+        } else if (charIndex >= word.end) {
+          low = mid + 1;
+        } else {
+          return mid;
+        }
+      }
+
+      return Math.max(0, Math.min(low, readAlongWords.length - 1));
+    }
+
+
+    function scrollTextBoxToChar(charIndex) {
+      const text = textBox.value;
+      if (!text || charIndex < 0) return;
+
+      const safeIndex = Math.max(0, Math.min(charIndex, text.length));
+      const beforeText = text.slice(0, safeIndex);
+      const totalLines = text.split("\n").length || 1;
+      const currentLine = beforeText.split("\n").length || 1;
+
+      const lineHeight = parseFloat(getComputedStyle(textBox).lineHeight) || 26;
+      const targetTop = Math.max(0, (currentLine - 4) * lineHeight);
+
+      textBox.scrollTop = targetTop;
+    }
+
+    function highlightWordByIndex(index) {
+      if (index < 0 || index >= readAlongWords.length || index === activeWordIndex) return;
+
+      const oldActive = readAlongBox.querySelector(".active-word");
+      if (oldActive) {
+        oldActive.classList.remove("active-word");
+        oldActive.classList.add("spoken-word");
+      }
+
+      const next = readAlongBox.querySelector(`[data-index="${index}"]`);
+      if (next) {
+        next.classList.add("active-word");
+        next.scrollIntoView({ block: "center", behavior: "smooth" });
+        activeWordIndex = index;
+      }
+    }
+
+    function clearReadAlongHighlight() {
+      const oldActive = readAlongBox.querySelector(".active-word");
+      if (oldActive) oldActive.classList.remove("active-word");
+      activeWordIndex = -1;
+    }
+
     function loadVoices() {
       voices = window.speechSynthesis.getVoices();
       voiceSelect.innerHTML = "";
@@ -489,6 +695,16 @@
     } else {
       setStatus("Your browser does not support speech synthesis.");
     }
+
+    importTxtBtn.addEventListener("click", () => {
+      fileInput.value = "";
+      fileInput.click();
+    });
+
+    importPdfBtn.addEventListener("click", () => {
+      pdfInput.value = "";
+      pdfInput.click();
+    });
 
     fileInput.addEventListener("change", () => {
       trackAppEvent("txt_imported");
@@ -598,24 +814,45 @@
       pitchValue.textContent = Number(pitch.value).toFixed(1);
     });
 
-    function splitTextIntoChunks(text, maxLength = 1600) {
-      const cleaned = text.replace(/\s+/g, " ").trim();
-      if (!cleaned) return [];
+    volume.addEventListener("input", () => {
+      volumeValue.textContent = `${volume.value}%`;
+    });
 
-      const sentences = cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleaned];
+    function splitTextIntoChunks(text, maxLength = 1600) {
+      const normalized = text.replace(/\r\n/g, "\n").trim();
+      if (!normalized) return [];
+
+      const sentenceMatches = [...normalized.matchAll(/[^.!?]+[.!?]+|[^.!?]+$/g)];
       const chunks = [];
       let chunk = "";
+      let chunkStart = 0;
 
-      for (const sentence of sentences) {
+      for (const match of sentenceMatches) {
+        const sentence = match[0];
+        const sentenceStart = match.index || 0;
+
         if ((chunk + " " + sentence).length > maxLength) {
-          if (chunk.trim()) chunks.push(chunk.trim());
+          if (chunk.trim()) {
+            chunks.push({
+              text: chunk.trim(),
+              start: chunkStart
+            });
+          }
           chunk = sentence;
+          chunkStart = sentenceStart;
         } else {
-          chunk += " " + sentence;
+          if (!chunk) chunkStart = sentenceStart;
+          chunk += sentence;
         }
       }
 
-      if (chunk.trim()) chunks.push(chunk.trim());
+      if (chunk.trim()) {
+        chunks.push({
+          text: chunk.trim(),
+          start: chunkStart
+        });
+      }
+
       return chunks;
     }
 
@@ -636,9 +873,11 @@
       }
 
       window.speechSynthesis.cancel();
+      renderReadAlong(text);
       currentChunks = splitTextIntoChunks(text);
       currentChunkIndex = 0;
       isReading = true;
+      isPaused = false;
       setStatus(label);
       speakChunk();
     }
@@ -646,13 +885,17 @@
     function speakChunk() {
       if (!isReading || currentChunkIndex >= currentChunks.length) {
         isReading = false;
+        isPaused = false;
+        clearReadAlongHighlight();
         setStatus("Finished reading.");
         return;
       }
 
-      const utterance = new SpeechSynthesisUtterance(currentChunks[currentChunkIndex]);
+      const chunk = currentChunks[currentChunkIndex];
+      const utterance = new SpeechSynthesisUtterance(chunk.text);
       utterance.rate = Number(rate.value);
       utterance.pitch = Number(pitch.value);
+      utterance.volume = Math.max(0, Math.min(1, Number(volume.value) / 100));
 
       const selectedVoiceIndex = voiceSelect.value;
       if (selectedVoiceIndex !== "" && voices[selectedVoiceIndex]) {
@@ -661,6 +904,15 @@
 
       utterance.onstart = () => {
         setStatus(`Reading section ${currentChunkIndex + 1} of ${currentChunks.length}...`);
+      };
+
+      utterance.onboundary = (event) => {
+        if (typeof event.charIndex === "number") {
+          const absoluteCharIndex = chunk.start + event.charIndex;
+          const wordIndex = findWordIndexFromChar(absoluteCharIndex);
+          highlightWordByIndex(wordIndex);
+          scrollTextBoxToChar(absoluteCharIndex);
+        }
       };
 
       utterance.onend = () => {
@@ -678,12 +930,14 @@
 
     readBtn.addEventListener("click", () => {
       trackAppEvent("read_from_beginning_clicked");
+      textBox.scrollTop = 0;
       beginReading(textBox.value.trim(), "Reading from beginning...");
     });
 
     readCursorBtn.addEventListener("click", () => {
       trackAppEvent("read_from_cursor_clicked");
       const position = getCursorPosition();
+      scrollTextBoxToChar(position);
       const textFromCursor = getTextFromPosition(position);
       beginReading(textFromCursor, `Reading from cursor at character ${position.toLocaleString()}...`);
     });
@@ -741,24 +995,31 @@
 
     pauseBtn.addEventListener("click", () => {
       window.speechSynthesis.pause();
-      setStatus("Paused.");
+      isPaused = true;
+      setStatus("Paused. Press Spacebar to resume.");
     });
 
     resumeBtn.addEventListener("click", () => {
       window.speechSynthesis.resume();
-      setStatus("Resumed.");
+      isPaused = false;
+      setStatus("Resumed. Press Spacebar to pause.");
     });
 
     stopBtn.addEventListener("click", () => {
       isReading = false;
+      isPaused = false;
       window.speechSynthesis.cancel();
+      clearReadAlongHighlight();
       setStatus("Stopped reading.");
     });
 
     clearBtn.addEventListener("click", () => {
       isReading = false;
+      isPaused = false;
       window.speechSynthesis.cancel();
       textBox.value = "";
+      readAlongBox.textContent = "Words will appear here when reading starts.";
+      readAlongWords = [];
       markedStart = null;
       try {
         localStorage.removeItem(TEXT_STORAGE_KEY);
@@ -767,6 +1028,32 @@
         // Ignore blocked storage.
       }
       setStatus("Text cleared.");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      const isTypingField = activeTag === "textarea" || activeTag === "input" || activeTag === "select";
+
+      if (event.code !== "Space" || isTypingField) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (!isReading && !window.speechSynthesis.speaking) {
+        setStatus("Nothing is reading yet. Press Read From Beginning or Read From Cursor first.");
+        return;
+      }
+
+      if (isPaused || window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        isPaused = false;
+        setStatus("Resumed. Press Spacebar to pause.");
+      } else {
+        window.speechSynthesis.pause();
+        isPaused = true;
+        setStatus("Paused. Press Spacebar to resume.");
+      }
     });
 
     function getSupportedMimeType() {
