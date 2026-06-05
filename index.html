@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Text and PDF Reader App</title>
+
+  <!-- PDF.js is loaded from a free CDN. Internet is needed for PDF import. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --button: #2563eb;
+      --button-hover: #1d4ed8;
+      --danger: #dc2626;
+      --good: #16a34a;
+      --warn: #f59e0b;
+      --purple: #7c3aed;
+      --orange: #ea580c;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #1e3a8a 0%, var(--bg) 42%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .app {
+      width: min(100%, 1040px);
+      background: rgba(31, 41, 55, 0.95);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 18px;
+      line-height: 1.4;
+    }
+
+    .controls,
+    .voice-row,
+    .record-row,
+    .start-row,
+    .pdf-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 12px 0;
+      align-items: center;
+    }
+
+    button,
+    label.file-button,
+    a.download-link {
+      border: 0;
+      border-radius: 10px;
+      background: var(--button);
+      color: white;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover,
+    label.file-button:hover,
+    a.download-link:hover {
+      background: var(--button-hover);
+    }
+
+    button.stop {
+      background: var(--danger);
+    }
+
+    button.stop:hover {
+      background: #b91c1c;
+    }
+
+    button.record {
+      background: var(--good);
+    }
+
+    button.record:hover {
+      background: #15803d;
+    }
+
+    button.purple {
+      background: var(--purple);
+    }
+
+    button.purple:hover {
+      background: #6d28d9;
+    }
+
+    button.orange,
+    label.orange {
+      background: var(--orange);
+    }
+
+    button.orange:hover,
+    label.orange:hover {
+      background: #c2410c;
+    }
+
+    button.secondary {
+      background: #374151;
+    }
+
+    button.secondary:hover {
+      background: #4b5563;
+    }
+
+    button:disabled,
+    a.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    select,
+    input[type="range"],
+    input[type="text"] {
+      background: #111827;
+      color: var(--text);
+      border: 1px solid #4b5563;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    input[type="text"] {
+      min-width: 220px;
+    }
+
+    .range-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 430px;
+      box-sizing: border-box;
+      border-radius: 14px;
+      border: 1px solid #4b5563;
+      background: #0b1220;
+      color: var(--text);
+      padding: 14px;
+      font-size: 17px;
+      line-height: 1.55;
+      resize: vertical;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.18);
+    }
+
+    .status {
+      margin-top: 10px;
+      color: var(--muted);
+      min-height: 22px;
+      font-size: 14px;
+    }
+
+    .notice {
+      margin: 12px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fde68a;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 14px;
+      line-height: 1.4;
+    }
+
+    .box {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 12px;
+      margin: 12px 0;
+      background: rgba(17, 24, 39, 0.55);
+    }
+
+    @media (max-width: 700px) {
+      body {
+        padding: 12px;
+      }
+
+      .app {
+        padding: 16px;
+      }
+
+      button,
+      label.file-button,
+      a.download-link,
+      select,
+      input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+      }
+
+      .range-wrap {
+        width: 100%;
+      }
+
+      input[type="range"] {
+        width: 100%;
+      }
+
+      textarea {
+        min-height: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Simple Text and PDF Reader</h1>
+    <div class="subtitle">
+      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud.
+    </div>
+
+    <div class="notice">
+      Import a PDF, extract its readable text, then use the reader controls below. Some PDFs are scanned images instead of selectable text, so those may not extract cleanly.
+    </div>
+
+    <div class="box">
+      <div class="pdf-row">
+        <label class="file-button orange" for="pdfInput">Import PDF</label>
+        <input id="pdfInput" type="file" accept=".pdf,application/pdf" />
+        <button id="extractPdfBtn" class="orange">Extract PDF Text</button>
+        <button id="addPdfPageMarkersBtn" class="secondary">PDF Broom</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="file-button" for="fileInput">Import TXT File</label>
+      <input id="fileInput" type="file" accept=".txt,text/plain" />
+      <button id="readBtn">Read From Beginning</button>
+      <button id="readCursorBtn" class="purple">Read From Cursor</button>
+      <button id="pauseBtn" class="secondary">Pause</button>
+      <button id="resumeBtn" class="secondary">Resume</button>
+      <button id="stopBtn" class="stop">Stop Reading</button>
+      <button id="clearBtn" class="secondary">Clear Text</button>
+    </div>
+
+    <div class="start-row">
+      <button id="markStartBtn" class="secondary">Mark Cursor Start</button>
+      <button id="jumpStartBtn" class="secondary">Jump To Marked Start</button>
+      <button id="clearMarkBtn" class="secondary">Clear Mark</button>
+      <button id="saveSpotBtn" class="secondary">Save Spot</button>
+      <button id="returnSpotBtn" class="secondary">Return To Saved Spot</button>
+      <button id="clearSavedSpotBtn" class="secondary">Clear Saved Spot</button>
+    </div>
+
+    <div class="record-row">
+      <button id="startRecordBtn" class="record">Start Recording</button>
+      <button id="stopRecordBtn" class="stop" disabled>Stop Recording</button>
+      <a id="downloadRecording" class="download-link disabled" download="text-reader-audio.webm">Download Recording</a>
+    </div>
+
+    <div class="voice-row">
+      <select id="voiceSelect" title="Voice"></select>
+
+      <div class="range-wrap">
+        <span>Speed</span>
+        <input id="rate" type="range" min="0.5" max="2" step="0.1" value="1" />
+        <span id="rateValue">1.0</span>
+      </div>
+
+      <div class="range-wrap">
+        <span>Pitch</span>
+        <input id="pitch" type="range" min="0" max="2" step="0.1" value="1" />
+        <span id="pitchValue">1.0</span>
+      </div>
+    </div>
+
+    <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
+
+    <div id="status" class="status">Ready.</div>
+
+    <div class="small">
+      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well.
+    </div>
+  </main>
+
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+
+    const fileInput = document.getElementById("fileInput");
+    const pdfInput = document.getElementById("pdfInput");
+    const extractPdfBtn = document.getElementById("extractPdfBtn");
+    const addPdfPageMarkersBtn = document.getElementById("addPdfPageMarkersBtn");
+
+    const textBox = document.getElementById("textBox");
+    const readBtn = document.getElementById("readBtn");
+    const readCursorBtn = document.getElementById("readCursorBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const resumeBtn = document.getElementById("resumeBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const markStartBtn = document.getElementById("markStartBtn");
+    const jumpStartBtn = document.getElementById("jumpStartBtn");
+    const clearMarkBtn = document.getElementById("clearMarkBtn");
+    const saveSpotBtn = document.getElementById("saveSpotBtn");
+    const returnSpotBtn = document.getElementById("returnSpotBtn");
+    const clearSavedSpotBtn = document.getElementById("clearSavedSpotBtn");
+    const voiceSelect = document.getElementById("voiceSelect");
+    const rate = document.getElementById("rate");
+    const pitch = document.getElementById("pitch");
+    const rateValue = document.getElementById("rateValue");
+    const pitchValue = document.getElementById("pitchValue");
+    const status = document.getElementById("status");
+
+    const startRecordBtn = document.getElementById("startRecordBtn");
+    const stopRecordBtn = document.getElementById("stopRecordBtn");
+    const downloadRecording = document.getElementById("downloadRecording");
+
+    let voices = [];
+    let currentChunks = [];
+    let currentChunkIndex = 0;
+    let isReading = false;
+    let markedStart = null;
+    const STORAGE_KEY = "simpleTextPdfReaderSavedSpotV1";
+    const TEXT_STORAGE_KEY = "simpleTextPdfReaderTextV1";
+    let loadedPdfArrayBuffer = null;
+    let loadedPdfName = "";
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let captureStream = null;
+
+    function setStatus(message) {
+      status.textContent = message;
+    }
+
+    function saveCurrentText() {
+      try {
+        localStorage.setItem(TEXT_STORAGE_KEY, textBox.value);
+      } catch (error) {
+        // Local storage may be blocked in some browser modes.
+      }
+    }
+
+    function saveSpot(position = null) {
+      const spot = position === null ? getCursorPosition() : position;
+      const saved = {
+        position: spot,
+        textLength: textBox.value.length,
+        savedAt: new Date().toISOString()
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        saveCurrentText();
+        setStatus(`Saved spot at character ${spot.toLocaleString()}.`);
+      } catch (error) {
+        setStatus("Could not save spot. Browser storage may be blocked.");
+      }
+    }
+
+    function getSavedSpot() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function returnToSavedSpot() {
+      const saved = getSavedSpot();
+
+      if (!saved || typeof saved.position !== "number") {
+        setStatus("No saved spot found.");
+        return;
+      }
+
+      const position = Math.min(saved.position, textBox.value.length);
+      textBox.focus();
+      textBox.setSelectionRange(position, position);
+      setStatus(`Returned to saved spot at character ${position.toLocaleString()}.`);
+    }
+
+    function restoreSavedTextAndSpotOnLoad() {
+      try {
+        const savedText = localStorage.getItem(TEXT_STORAGE_KEY);
+        if (savedText && !textBox.value) {
+          textBox.value = savedText;
+        }
+
+        const saved = getSavedSpot();
+        if (saved && typeof saved.position === "number") {
+          const position = Math.min(saved.position, textBox.value.length);
+          textBox.focus();
+          textBox.setSelectionRange(position, position);
+          setStatus(`Restored saved spot at character ${position.toLocaleString()}.`);
+        }
+      } catch (error) {
+        // Ignore blocked storage.
+      }
+    }
+
+    function loadVoices() {
+      voices = window.speechSynthesis.getVoices();
+      voiceSelect.innerHTML = "";
+
+      if (voices.length === 0) {
+        const option = document.createElement("option");
+        option.textContent = "Default voice";
+        option.value = "";
+        voiceSelect.appendChild(option);
+        return;
+      }
+
+      voices.forEach((voice, index) => {
+        const option = document.createElement("option");
+        option.value = index;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        voiceSelect.appendChild(option);
+      });
+    }
+
+    loadVoices();
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    } else {
+      setStatus("Your browser does not support speech synthesis.");
+    }
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        textBox.value = reader.result;
+        saveCurrentText();
+        markedStart = null;
+        setStatus(`Loaded TXT: ${file.name}`);
+      };
+
+      reader.onerror = () => {
+        setStatus("Could not read that TXT file.");
+      };
+
+      reader.readAsText(file);
+    });
+
+    pdfInput.addEventListener("change", () => {
+      const file = pdfInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        loadedPdfArrayBuffer = reader.result;
+        loadedPdfName = file.name;
+        setStatus(`Loaded PDF: ${file.name}. Click Extract PDF Text.`);
+      };
+
+      reader.onerror = () => {
+        setStatus("Could not read that PDF file.");
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    async function extractTextFromPdf(includePageMarkers = true) {
+      if (!window.pdfjsLib) {
+        setStatus("PDF.js did not load. Check your internet connection.");
+        return;
+      }
+
+      if (!loadedPdfArrayBuffer) {
+        setStatus("Import a PDF first.");
+        return;
+      }
+
+      try {
+        setStatus("Extracting PDF text...");
+        const typedArray = new Uint8Array(loadedPdfArrayBuffer.slice(0));
+        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        let output = `PDF: ${loadedPdfName}\nTotal Pages: ${pdf.numPages}\n\n`;
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const content = await page.getTextContent();
+          const strings = content.items.map(item => item.str).filter(Boolean);
+          const pageText = strings.join(" ").replace(/\s+/g, " ").trim();
+
+          if (includePageMarkers) {
+            output += `\n\n===== Page ${pageNum} =====\n`;
+          }
+
+          if (pageText) {
+            output += pageText + "\n";
+          } else {
+            output += "[No selectable text found on this page. It may be a scanned image page.]\n";
+          }
+
+
+        }
+
+        textBox.value = output.trim();
+        saveCurrentText();
+        markedStart = null;
+        setStatus(`Extracted text from ${pdf.numPages} PDF page(s).`);
+      } catch (error) {
+        setStatus("Could not extract text from this PDF.");
+      }
+    }
+
+    extractPdfBtn.addEventListener("click", () => {
+      extractTextFromPdf(true);
+    });
+
+    addPdfPageMarkersBtn.addEventListener("click", () => {
+      const currentText = textBox.value.trim();
+      if (!currentText) {
+        setStatus("Extract a PDF first, then page markers will already be included.");
+        return;
+      }
+      textBox.value = currentText.replace(/===== Page/g, "\n\n===== Page");
+      setStatus("Page markers cleaned up.");
+    });
+
+    rate.addEventListener("input", () => {
+      rateValue.textContent = Number(rate.value).toFixed(1);
+    });
+
+    pitch.addEventListener("input", () => {
+      pitchValue.textContent = Number(pitch.value).toFixed(1);
+    });
+
+    function splitTextIntoChunks(text, maxLength = 1600) {
+      const cleaned = text.replace(/\s+/g, " ").trim();
+      if (!cleaned) return [];
+
+      const sentences = cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleaned];
+      const chunks = [];
+      let chunk = "";
+
+      for (const sentence of sentences) {
+        if ((chunk + " " + sentence).length > maxLength) {
+          if (chunk.trim()) chunks.push(chunk.trim());
+          chunk = sentence;
+        } else {
+          chunk += " " + sentence;
+        }
+      }
+
+      if (chunk.trim()) chunks.push(chunk.trim());
+      return chunks;
+    }
+
+    function getCursorPosition() {
+      textBox.focus();
+      return textBox.selectionStart || 0;
+    }
+
+    function getTextFromPosition(position) {
+      const fullText = textBox.value;
+      return fullText.slice(position).trim();
+    }
+
+    function beginReading(text, label) {
+      if (!text.trim()) {
+        setStatus("There is no text to read from that spot.");
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      currentChunks = splitTextIntoChunks(text);
+      currentChunkIndex = 0;
+      isReading = true;
+      setStatus(label);
+      speakChunk();
+    }
+
+    function speakChunk() {
+      if (!isReading || currentChunkIndex >= currentChunks.length) {
+        isReading = false;
+        setStatus("Finished reading.");
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(currentChunks[currentChunkIndex]);
+      utterance.rate = Number(rate.value);
+      utterance.pitch = Number(pitch.value);
+
+      const selectedVoiceIndex = voiceSelect.value;
+      if (selectedVoiceIndex !== "" && voices[selectedVoiceIndex]) {
+        utterance.voice = voices[selectedVoiceIndex];
+      }
+
+      utterance.onstart = () => {
+        setStatus(`Reading section ${currentChunkIndex + 1} of ${currentChunks.length}...`);
+      };
+
+      utterance.onend = () => {
+        currentChunkIndex++;
+        speakChunk();
+      };
+
+      utterance.onerror = () => {
+        setStatus("Speech stopped or an error occurred.");
+        isReading = false;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    readBtn.addEventListener("click", () => {
+      beginReading(textBox.value.trim(), "Reading from beginning...");
+    });
+
+    readCursorBtn.addEventListener("click", () => {
+      const position = getCursorPosition();
+      const textFromCursor = getTextFromPosition(position);
+      beginReading(textFromCursor, `Reading from cursor at character ${position.toLocaleString()}...`);
+    });
+
+    markStartBtn.addEventListener("click", () => {
+      markedStart = getCursorPosition();
+      setStatus(`Marked start at character ${markedStart.toLocaleString()}.`);
+    });
+
+    jumpStartBtn.addEventListener("click", () => {
+      if (markedStart === null) {
+        setStatus("No start mark yet. Click in the text and press Mark Cursor Start first.");
+        return;
+      }
+
+      textBox.focus();
+      textBox.setSelectionRange(markedStart, markedStart);
+      setStatus(`Jumped to marked start at character ${markedStart.toLocaleString()}.`);
+    });
+
+    clearMarkBtn.addEventListener("click", () => {
+      markedStart = null;
+      setStatus("Start mark cleared.");
+    });
+
+    saveSpotBtn.addEventListener("click", () => {
+      saveSpot();
+    });
+
+    returnSpotBtn.addEventListener("click", () => {
+      returnToSavedSpot();
+    });
+
+    clearSavedSpotBtn.addEventListener("click", () => {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        setStatus("Saved spot cleared.");
+      } catch (error) {
+        setStatus("Could not clear saved spot.");
+      }
+    });
+
+    textBox.addEventListener("click", () => {
+      saveSpot(getCursorPosition());
+    });
+
+    textBox.addEventListener("keyup", () => {
+      saveSpot(getCursorPosition());
+    });
+
+    textBox.addEventListener("input", () => {
+      saveCurrentText();
+    });
+
+    pauseBtn.addEventListener("click", () => {
+      window.speechSynthesis.pause();
+      setStatus("Paused.");
+    });
+
+    resumeBtn.addEventListener("click", () => {
+      window.speechSynthesis.resume();
+      setStatus("Resumed.");
+    });
+
+    stopBtn.addEventListener("click", () => {
+      isReading = false;
+      window.speechSynthesis.cancel();
+      setStatus("Stopped reading.");
+    });
+
+    clearBtn.addEventListener("click", () => {
+      isReading = false;
+      window.speechSynthesis.cancel();
+      textBox.value = "";
+      markedStart = null;
+      try {
+        localStorage.removeItem(TEXT_STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        // Ignore blocked storage.
+      }
+      setStatus("Text cleared.");
+    });
+
+    function getSupportedMimeType() {
+      const types = [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm;codecs=opus",
+        "video/webm"
+      ];
+
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) return type;
+      }
+
+      return "";
+    }
+
+    startRecordBtn.addEventListener("click", async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        setStatus("Recording is not supported in this browser.");
+        return;
+      }
+
+      try {
+        downloadRecording.classList.add("disabled");
+        downloadRecording.removeAttribute("href");
+        recordedChunks = [];
+
+        captureStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+
+        const audioTracks = captureStream.getAudioTracks();
+        if (audioTracks.length === 0) {
+          setStatus("No audio track was shared. Try again and enable Share tab audio.");
+        }
+
+        const mimeType = getSupportedMimeType();
+        mediaRecorder = new MediaRecorder(captureStream, mimeType ? { mimeType } : undefined);
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: "video/webm" });
+          const url = URL.createObjectURL(blob);
+          downloadRecording.href = url;
+          downloadRecording.classList.remove("disabled");
+
+          if (captureStream) {
+            captureStream.getTracks().forEach(track => track.stop());
+            captureStream = null;
+          }
+
+          startRecordBtn.disabled = false;
+          stopRecordBtn.disabled = true;
+          setStatus("Recording ready. Click Download Recording.");
+        };
+
+        mediaRecorder.start();
+        startRecordBtn.disabled = true;
+        stopRecordBtn.disabled = false;
+        setStatus("Recording started. Now press Read From Beginning or Read From Cursor.");
+
+      } catch (error) {
+        setStatus("Recording was cancelled or blocked by the browser.");
+        startRecordBtn.disabled = false;
+        stopRecordBtn.disabled = true;
+      }
+    });
+
+    stopRecordBtn.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        setStatus("Stopping recording...");
+      }
+    });
+
+    restoreSavedTextAndSpotOnLoad();
+  </script>
+</body>
+</html>
