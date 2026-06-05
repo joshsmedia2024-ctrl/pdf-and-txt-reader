@@ -489,6 +489,8 @@
     let loadedPdfName = "";
     let readAlongWords = [];
     let activeWordIndex = -1;
+    let highlightFallbackTimer = null;
+    let currentUtteranceHadBoundary = false;
 
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -585,8 +587,10 @@
     }
 
     function renderReadAlong(text) {
+      clearHighlightFallbackTimer();
       readAlongWords = tokenizeForReadAlong(text);
       activeWordIndex = -1;
+      readAlongBox.scrollTop = 0;
 
       if (!readAlongWords.length) {
         readAlongBox.textContent = "Words will appear here when reading starts.";
@@ -645,6 +649,52 @@
       textBox.scrollTop = targetTop;
     }
 
+
+    function clearHighlightFallbackTimer() {
+      if (highlightFallbackTimer) {
+        clearInterval(highlightFallbackTimer);
+        highlightFallbackTimer = null;
+      }
+    }
+
+    function startFallbackHighlight(chunk) {
+      clearHighlightFallbackTimer();
+      currentUtteranceHadBoundary = false;
+
+      const chunkWords = tokenizeForReadAlong(chunk.text);
+      if (!chunkWords.length) return;
+
+      let chunkWordIndex = 0;
+      const firstGlobalIndex = findWordIndexFromChar(chunk.start);
+      const rateValue = Math.max(0.5, Number(rate.value) || 1);
+      const intervalMs = Math.max(140, 330 / rateValue);
+
+      highlightFallbackTimer = setInterval(() => {
+        if (currentUtteranceHadBoundary) {
+          clearHighlightFallbackTimer();
+          return;
+        }
+
+        if (!isReading || window.speechSynthesis.paused) {
+          return;
+        }
+
+        const targetIndex = firstGlobalIndex + chunkWordIndex;
+        highlightWordByIndex(targetIndex);
+
+        const word = readAlongWords[targetIndex];
+        if (word) {
+          scrollTextBoxToChar(word.start);
+        }
+
+        chunkWordIndex++;
+
+        if (chunkWordIndex >= chunkWords.length) {
+          clearHighlightFallbackTimer();
+        }
+      }, intervalMs);
+    }
+
     function highlightWordByIndex(index) {
       if (index < 0 || index >= readAlongWords.length || index === activeWordIndex) return;
 
@@ -663,6 +713,7 @@
     }
 
     function clearReadAlongHighlight() {
+      clearHighlightFallbackTimer();
       const oldActive = readAlongBox.querySelector(".active-word");
       if (oldActive) oldActive.classList.remove("active-word");
       activeWordIndex = -1;
@@ -904,10 +955,16 @@
 
       utterance.onstart = () => {
         setStatus(`Reading section ${currentChunkIndex + 1} of ${currentChunks.length}...`);
+        const firstWordIndex = findWordIndexFromChar(chunk.start);
+        highlightWordByIndex(firstWordIndex);
+        scrollTextBoxToChar(chunk.start);
+        startFallbackHighlight(chunk);
       };
 
       utterance.onboundary = (event) => {
         if (typeof event.charIndex === "number") {
+          currentUtteranceHadBoundary = true;
+          clearHighlightFallbackTimer();
           const absoluteCharIndex = chunk.start + event.charIndex;
           const wordIndex = findWordIndexFromChar(absoluteCharIndex);
           highlightWordByIndex(wordIndex);
@@ -916,11 +973,13 @@
       };
 
       utterance.onend = () => {
+        clearHighlightFallbackTimer();
         currentChunkIndex++;
         speakChunk();
       };
 
       utterance.onerror = () => {
+        clearHighlightFallbackTimer();
         setStatus("Speech stopped or an error occurred.");
         isReading = false;
       };
@@ -1009,6 +1068,7 @@
       isReading = false;
       isPaused = false;
       window.speechSynthesis.cancel();
+      clearHighlightFallbackTimer();
       clearReadAlongHighlight();
       setStatus("Stopped reading.");
     });
