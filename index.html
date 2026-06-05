@@ -5,6 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Simple Text and PDF Reader App</title>
 
+
+  <!-- Google Analytics 4
+       Replace G-XXXXXXXXXX with your real GA4 Measurement ID before publishing.
+       Example format: G-ABC123XYZ9
+  -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XYNR40PW3D"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag("js", new Date());
+    gtag("config", "G-XYNR40PW3D");
+
+    function trackAppEvent(eventName) {
+      if (typeof gtag === "function") {
+        gtag("event", eventName, {
+          event_category: "text_reader_app"
+        });
+      }
+
+      console.log("Tracked:", eventName);
+    }
+  </script>
+
   <!-- PDF.js is loaded from a free CDN. Internet is needed for PDF import. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
@@ -468,6 +491,7 @@
     }
 
     fileInput.addEventListener("change", () => {
+      trackAppEvent("txt_imported");
       const file = fileInput.files[0];
       if (!file) return;
 
@@ -488,6 +512,7 @@
     });
 
     pdfInput.addEventListener("change", () => {
+      trackAppEvent("pdf_imported");
       const file = pdfInput.files[0];
       if (!file) return;
 
@@ -652,10 +677,12 @@
     }
 
     readBtn.addEventListener("click", () => {
+      trackAppEvent("read_from_beginning_clicked");
       beginReading(textBox.value.trim(), "Reading from beginning...");
     });
 
     readCursorBtn.addEventListener("click", () => {
+      trackAppEvent("read_from_cursor_clicked");
       const position = getCursorPosition();
       const textFromCursor = getTextFromPosition(position);
       beginReading(textFromCursor, `Reading from cursor at character ${position.toLocaleString()}...`);
@@ -683,6 +710,7 @@
     });
 
     saveSpotBtn.addEventListener("click", () => {
+      trackAppEvent("save_spot_clicked");
       saveSpot();
     });
 
@@ -757,6 +785,7 @@
     }
 
     startRecordBtn.addEventListener("click", async () => {
+      trackAppEvent("recording_started");
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         setStatus("Recording is not supported in this browser.");
         return;
@@ -822,6 +851,7 @@
     });
 
     restoreSavedTextAndSpotOnLoad();
+    trackAppEvent("app_opened");
   </script>
 </body>
 </html>
