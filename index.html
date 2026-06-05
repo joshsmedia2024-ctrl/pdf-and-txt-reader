@@ -282,12 +282,12 @@
   <main class="app">
     <h1>Simple Text and PDF Reader</h1>
     <div class="subtitle">
-      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with volume control and a button that jumps back to the last spoken word.
+      Import TXT or PDF files, extract readable PDF text, click where you want to begin, then read aloud with volume control.
     </div>
 
     <div class="notice">
       Import a PDF, extract its readable text, then use the reader controls below. Some PDFs are scanned images instead of selectable text, so those may not extract cleanly.
-      <br><br><b>Keyboard shortcut:</b> press <b>Spacebar</b> to pause or resume reading. When typing inside the text box, Spacebar still types a normal space.
+      <br><br><b>Keyboard shortcut:</b> press <b>Spacebar</b> to pause or resume reading. The text box is read-only, and it will not auto-scroll while audio plays, so you can scroll manually.
     </div>
 
     <div class="box">
@@ -314,7 +314,6 @@
       <button id="saveSpotBtn" class="secondary">Save Spot</button>
       <button id="returnSpotBtn" class="secondary">Return To Saved Spot</button>
       <button id="clearSavedSpotBtn" class="secondary">Clear Saved Spot</button>
-      <button id="goLastSpokenBtn" class="secondary">Go To Last Word Spoken</button>
     </div>
 
     <div class="record-row">
@@ -345,13 +344,13 @@
       </div>
     </div>
 
-    <textarea id="textBox" placeholder="Paste text here, import a TXT file, or extract text from a PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
+    <textarea id="textBox" readonly placeholder="Import a TXT file or PDF. Click anywhere in the text, then press Read From Cursor..."></textarea>
 
 
     <div id="status" class="status">Ready.</div>
 
     <div class="small">
-      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows. Use Go To Last Word Spoken to jump the text box back near the latest spoken word.
+      PDF importing uses PDF.js from a free CDN, so it needs internet access the first time. Some PDFs contain scanned pictures of pages instead of real text; those may not extract well. Volume maxes out at 100%, which is the loudest the browser text-to-speech engine allows. The text box is read-only and stays where you leave it while audio plays, so users can scroll manually.
     </div>
   </main>
 
@@ -377,7 +376,6 @@
     const saveSpotBtn = document.getElementById("saveSpotBtn");
     const returnSpotBtn = document.getElementById("returnSpotBtn");
     const clearSavedSpotBtn = document.getElementById("clearSavedSpotBtn");
-    const goLastSpokenBtn = document.getElementById("goLastSpokenBtn");
     const voiceSelect = document.getElementById("voiceSelect");
     const rate = document.getElementById("rate");
     const pitch = document.getElementById("pitch");
@@ -464,15 +462,6 @@
       setStatus(`Returned to saved spot at character ${position.toLocaleString()}.`);
     }
 
-    function returnToLastSpokenWord() {
-      const position = Math.max(0, Math.min(lastSpokenCharIndex || 0, textBox.value.length));
-
-      textBox.focus();
-      textBox.setSelectionRange(position, position);
-      scrollTextBoxToChar(position);
-      setStatus(`Jumped to last spoken word area at character ${position.toLocaleString()}.`);
-    }
-
     function restoreSavedTextAndSpotOnLoad() {
       try {
         const savedText = localStorage.getItem(TEXT_STORAGE_KEY);
@@ -542,18 +531,8 @@
 
 
     function scrollTextBoxToChar(charIndex) {
-      const text = textBox.value;
-      if (!text || charIndex < 0) return;
-
-      const safeIndex = Math.max(0, Math.min(charIndex, text.length));
-      const beforeText = text.slice(0, safeIndex);
-      const totalLines = text.split("\n").length || 1;
-      const currentLine = beforeText.split("\n").length || 1;
-
-      const lineHeight = parseFloat(getComputedStyle(textBox).lineHeight) || 26;
-      const targetTop = Math.max(0, (currentLine - 4) * lineHeight);
-
-      textBox.scrollTop = targetTop;
+      // Auto-scroll disabled. The user controls text position manually while audio plays.
+      return;
     }
 
 
@@ -921,14 +900,12 @@
 
     readBtn.addEventListener("click", () => {
       trackAppEvent("read_from_beginning_clicked");
-      textBox.scrollTop = 0;
       beginReading(textBox.value.trim(), "Reading from beginning...");
     });
 
     readCursorBtn.addEventListener("click", () => {
       trackAppEvent("read_from_cursor_clicked");
       const position = getCursorPosition();
-      scrollTextBoxToChar(position);
       const textFromCursor = getTextFromPosition(position);
       beginReading(textFromCursor, `Reading from cursor at character ${position.toLocaleString()}...`);
     });
@@ -949,18 +926,6 @@
       } catch (error) {
         setStatus("Could not clear saved spot.");
       }
-    });
-
-    goLastSpokenBtn.addEventListener("click", () => {
-      returnToLastSpokenWord();
-    });
-
-    textBox.addEventListener("click", () => {
-      saveSpot(getCursorPosition());
-    });
-
-    textBox.addEventListener("keyup", () => {
-      saveSpot(getCursorPosition());
     });
 
     textBox.addEventListener("input", () => {
@@ -1008,7 +973,7 @@
 
     document.addEventListener("keydown", (event) => {
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
-      const isTypingField = activeTag === "textarea" || activeTag === "input" || activeTag === "select";
+      const isTypingField = activeTag === "input" || activeTag === "select";
 
       if (event.code !== "Space" || isTypingField) {
         return;
